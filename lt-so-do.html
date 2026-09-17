@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LT SO DO — Dashboard KPI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#F4F6F9; --card:#FFFFFF; --ink:#22262B; --muted:#7B838E;
+  --yellow:#FFC20E; --yellow-soft:#FFF3CE; --dark:#1E2126; --dark2:#2A2E34;
+  --line:#E8EBEF; --shadow:0 10px 30px rgba(34,38,43,.07);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:var(--canvas);color:var(--ink);display:flex;min-height:100vh;font-size:16px;line-height:1.5}
+a:focus-visible{outline:2px solid var(--yellow);outline-offset:2px;border-radius:10px}
+.sidebar{width:230px;flex:none;background:var(--dark);color:#fff;padding:22px 14px;display:flex;flex-direction:column;gap:24px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 6px}
+.mark{width:38px;height:38px;flex:none;border-radius:11px;background:var(--yellow);color:var(--dark);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.brand b{display:block;font-size:13.5px;line-height:1.25}
+.brand span{display:block;font-size:11.5px;color:#9AA1AB;font-weight:500}
+nav{display:flex;flex-direction:column;gap:4px}
+nav a{display:flex;align-items:center;gap:11px;color:#B9BFC8;text-decoration:none;font-size:13.5px;font-weight:600;padding:10px 12px;border-radius:11px}
+nav a svg{width:17px;height:17px;flex:none}
+nav a.active{background:var(--yellow);color:var(--dark)}
+nav a:hover:not(.active){background:var(--dark2);color:#fff}
+.side-note{margin-top:auto;background:var(--dark2);border-radius:13px;padding:13px 14px;font-size:11.5px;color:#9AA1AB;line-height:1.55}
+.side-note b{display:block;color:#fff;font-size:12px;margin-bottom:3px}
+main{flex:1;min-width:0;padding:22px 26px 26px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.topbar h1{font-size:21px;font-weight:800}
+.topbar .sub{font-size:12.5px;color:var(--muted);font-weight:500}
+.user{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:999px;padding:6px 16px 6px 7px;box-shadow:var(--shadow)}
+.ava{width:34px;height:34px;border-radius:50%;flex:none;background:var(--yellow);color:var(--dark);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px}
+.user b{display:block;font-size:13px;line-height:1.2}
+.user span{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.hold{background:var(--card);border-radius:17px;box-shadow:var(--shadow);padding:56px 24px;text-align:center}
+.hicon{width:52px;height:52px;border-radius:15px;background:var(--yellow-soft);margin:0 auto 14px;
+  display:flex;align-items:center;justify-content:center}
+.hicon svg{width:24px;height:24px;stroke:#B08900}
+.hold h3{font-size:16.5px;font-weight:800;margin-bottom:5px}
+.hold p{font-size:13px;color:var(--muted);max-width:52ch;margin:0 auto}
+.hold p b{color:var(--ink)}
+footer{margin-top:18px;font-size:12px;color:var(--muted)}
+@media (max-width:880px){
+  body{flex-direction:column}
+  .sidebar{width:100%;flex-direction:column;gap:14px;padding:16px}
+  nav{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  nav a{white-space:nowrap}
+  .side-note{display:none}
+  main{padding:18px 16px 22px}
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="mark">UT</div>
+    <div><b>United Tractors</b><span>Cabang Sorong</span></div>
+  </div>
+  <nav aria-label="Navigasi modul">
+    <a href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"/></svg>
+      Home</a>
+    <a href="otif-parts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+      OTIF Parts</a>
+    <a href="otif-service.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      OTIF Service</a>
+    <a href="ostpo.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>
+      OSTPO</a>
+    <a href="wo-tracking-parts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11"/><path d="M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>
+      WO Tracking Parts</a>
+    <a class="active" href="lt-so-do.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      LT SO DO</a>
+  </nav>
+  <div class="side-note"><b>Data aman</b>Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server.</div>
+</aside>
+
+<main>
+  <div class="topbar">
+    <div>
+      <h1>LT SO DO</h1>
+      <div class="sub">Lead time Sales Order ke Delivery Order</div>
+    </div>
+    <div class="user">
+      <div class="ava">RR</div>
+      <div><b>Rizki Ryan Hermawan</b><span>Part Transaction Officer</span></div>
+    </div>
+  </div>
+
+  <div class="hold">
+    <div class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+    <h3>Modul ini sedang disiapkan</h3>
+    <p>Dashboard LT SO DO akan dibangun dan divalidasi terhadap data asli. Yang dibutuhkan: contoh file <b>LT_SO_DO_2026.xlsx</b> dari export SAP.</p>
+  </div>
+
+  <footer>Dashboard KPI — Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong.</footer>
+</main>
+
+</body>
+</html>
