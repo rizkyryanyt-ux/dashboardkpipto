@@ -157,6 +157,11 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
 .pmsg{font-size:12.5px;margin-top:10px;color:var(--muted)}
 .pmsg.ok{color:#067647;font-weight:600}
 .pmsg.err{color:#B42318;font-weight:600}
+
+details.pub summary{font-size:15px;font-weight:800;cursor:pointer;list-style:none;color:var(--muted)}
+details.pub summary::-webkit-details-marker{display:none}
+details.pub summary::after{content:' \25be'}
+details.pub[open] summary{margin-bottom:10px;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -211,8 +216,18 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
     <div class="c1"></div><div class="c2"></div>
   </div>
 
-  <div class="pub">
-    <h3>Publikasi data untuk kolega</h3>
+  <div class="pub" id="hlock" style="display:none">
+    <h3>Dashboard terkunci</h3>
+    <p>Data publikasi tersedia (per <span id="hlockAt"></span>). Masukkan kata sandi dari pengelola — cukup sekali di perangkat ini — lalu buka modul mana pun lewat menu.</p>
+    <div class="pubrow">
+      <input type="password" id="hlpass" placeholder="Kata sandi" aria-label="Kata sandi publikasi">
+      <button class="btn" id="hlbtn" type="button">Buka dashboard</button>
+    </div>
+    <div class="pmsg err" id="hlmsg" style="display:none">Kata sandi salah — coba lagi.</div>
+  </div>
+
+  <details class="pub">
+    <summary>Publikasi data untuk kolega (khusus pengelola)</summary>
     <p>Data yang sudah Anda upload di tiap modul bisa dibagikan ke semua kolega: kunci dengan kata sandi, unduh satu file publikasi, lalu upload file itu ke repo GitHub (Add file → Upload files → Commit). Kolega cukup memasukkan kata sandi sekali di perangkatnya.</p>
     <div id="publist"></div>
     <div class="pubrow">
@@ -220,7 +235,7 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
       <button class="btn" id="pbtn" type="button">Unduh file publikasi</button>
     </div>
     <div class="pmsg" id="pmsg"></div>
-  </div>
+  </details>
 
   <div class="section-title">Modul KPI</div>
   <div class="grid">
@@ -346,6 +361,37 @@ $('pbtn').addEventListener('click',function(){
 });
 try{var sp=localStorage.getItem('dashPass_v1');if(sp)$('ppass').value=sp;}catch(e){}
 renderList();
+})();
+
+</script>
+<script>
+
+(function(){
+var $=function(id){return document.getElementById(id);};
+function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+if(typeof fetch==='undefined'||!window.crypto||!crypto.subtle)return;
+fetch('dashboard-data.json?t='+Date.now(),{cache:'no-store'})
+ .then(function(r){if(!r.ok)throw 0;return r.json();})
+ .then(function(pkg){
+   if(!pkg||!pkg.ct)throw 0;
+   function show(wrong){
+     $('hlock').style.display='block';
+     $('hlockAt').textContent=fmtWhen(pkg.at);
+     $('hlmsg').style.display=wrong?'block':'none';
+   }
+   function attempt(p){
+     if(!p)return;
+     KP.decryptBundle(p,pkg).then(function(){
+       try{localStorage.setItem('dashPass_v1',p);}catch(e){}
+       $('hlock').innerHTML='<h3>Dashboard terbuka</h3><p>Kata sandi tersimpan di perangkat ini. Buka modul mana pun lewat menu \u2014 datanya langsung tampil.</p>';
+     }).catch(function(){show(true);});
+   }
+   $('hlbtn').addEventListener('click',function(){attempt($('hlpass').value);});
+   $('hlpass').addEventListener('keydown',function(e){if(e.key==='Enter')attempt($('hlpass').value);});
+   var pass=null;try{pass=localStorage.getItem('dashPass_v1');}catch(e){}
+   if(!pass){show(false);return;}
+   KP.decryptBundle(pass,pkg).catch(function(){show(false);});
+ }).catch(function(){});
 })();
 
 </script>

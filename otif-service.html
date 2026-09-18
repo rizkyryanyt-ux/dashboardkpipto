@@ -116,6 +116,9 @@ td.mono{white-space:nowrap;font-weight:600}
 .okmsg{display:flex;align-items:center;gap:10px;background:var(--green-soft);color:#067647;
   border-radius:12px;padding:14px 16px;font-size:13px;font-weight:700}
 footer{margin-top:18px;font-size:12px;color:var(--muted)}
+.unlockrow{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle;flex-wrap:wrap}
+.unlockrow input{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:13px;min-width:170px}
+.unlockrow input:focus{outline:2px solid var(--yellow);border-color:var(--yellow)}
 
 @media (max-width:960px){.rowgrid{grid-template-columns:1fr}}
 @media (max-width:880px){
@@ -140,6 +143,11 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
 .unlockrow{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle;flex-wrap:wrap}
 .unlockrow input{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:13px;min-width:170px}
 .unlockrow input:focus{outline:2px solid var(--yellow);border-color:var(--yellow)}
+#locked{cursor:default}
+.unlockrow.center{margin-top:4px;margin-left:0;justify-content:center}
+.lmsg{color:#B42318;font-weight:700;font-size:12.5px;margin-top:10px}
+.drop .alt{margin-top:16px;margin-bottom:0;font-size:12px}
+.drop .alt a{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -192,6 +200,19 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
     <p>Tarik file ke sini atau klik untuk memilih. Data diproses lokal dan tersimpan di browser perangkat ini — saat file baru diupload, dashboard otomatis diperbarui.</p>
     <span class="btn">Pilih file</span>
   </div>
+
+  <div id="locked" class="drop" style="display:none;cursor:default">
+    <div class="dicon"><svg viewBox="0 0 24 24" fill="none" stroke="#B08900" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <h3>Dashboard terkunci</h3>
+    <p>Data publikasi tersedia (per <span id="lockAt"></span>). Masukkan kata sandi dari pengelola — cukup sekali di perangkat ini.</p>
+    <div class="unlockrow center">
+      <input type="password" id="lpass" placeholder="Kata sandi" aria-label="Kata sandi publikasi">
+      <button class="btn" id="lbtn" type="button">Buka dashboard</button>
+    </div>
+    <div class="lmsg" id="lmsg" style="display:none">Kata sandi salah — coba lagi.</div>
+    <p class="alt"><a href="#" id="lalt">atau upload file Excel Anda sendiri</a></p>
+  </div>
+
 
   <div id="dash" style="display:none">
     <div class="card databar">
@@ -604,7 +625,7 @@ function renderMisses(rows){
 bindCommonEvents();
 function afterData(){if(DATA&&DATA.months)SELECTED=defaultMonth(DATA.months);}
 /* ---------- data publikasi (dashboard-data.json terenkripsi) ---------- */
-var SHAREDPKG=null, SHARED_MOD_AT=null;
+var SHAREDPKG=null, SHARED_MOD_AT=null, UNLOCKED=false, LOCK_OPTOUT=false, LOCK_BOUND=false;
 function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function persistBadgeS(ok){return ok?'<span class="badge ok">Tersimpan di perangkat ini</span>':'<span class="badge warn">Hanya sesi ini \u2014 penyimpanan browser tidak tersedia</span>';}
 function badgeLine(){
@@ -614,34 +635,69 @@ function badgeLine(){
     s+=' <span class="badge warn">Lebih baru dari publikasi \u2014 publikasikan ulang di Home</span>';
   return s;
 }
+function updateLockView(){
+  var lock=document.getElementById('locked'); if(!lock) return;
+  var show=(!DATA) && SHAREDPKG && !UNLOCKED && !LOCK_OPTOUT;
+  lock.style.display=show?'block':'none';
+  if(show){
+    $('empty').style.display='none';
+    $('lockAt').textContent=fmtWhen(SHAREDPKG.at);
+  } else if(!DATA){
+    $('empty').style.display='block';
+  }
+}
+function bindLock(){
+  if(LOCK_BOUND || !document.getElementById('locked')) return;
+  LOCK_BOUND=true;
+  $('lbtn').addEventListener('click',function(){attemptUnlock($('lpass').value);});
+  $('lpass').addEventListener('keydown',function(e){ if(e.key==='Enter') attemptUnlock($('lpass').value); });
+  $('lalt').addEventListener('click',function(e){
+    e.preventDefault(); LOCK_OPTOUT=true;
+    $('locked').style.display='none'; $('empty').style.display='block';
+  });
+}
 function loadShared(){
   if(typeof fetch==='undefined' || !window.crypto || !crypto.subtle) return;
   fetch('dashboard-data.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-    .then(function(pkg){ if(!pkg || !pkg.ct) throw 0; SHAREDPKG=pkg; tryUnlock(); })
+    .then(function(pkg){ if(!pkg || !pkg.ct) throw 0; SHAREDPKG=pkg; bindLock(); tryUnlock(); })
     .catch(function(){});
 }
 function tryUnlock(){
   var pass=null; try{pass=localStorage.getItem('dashPass_v1');}catch(e){}
-  if(!pass){ showUnlock(false); return; }
-  KP.decryptBundle(pass,SHAREDPKG).then(applyBundle).catch(function(){ showUnlock(false); });
+  if(!pass){ promptUnlock(false); return; }
+  KP.decryptBundle(pass,SHAREDPKG).then(onUnlocked).catch(function(){ promptUnlock(false); });
 }
-function showUnlock(wrong){
-  showBanner('info',(wrong?'Kata sandi salah. ':'')+'Data publikasi dashboard tersedia (per '+fmtWhen(SHAREDPKG.at)+'). Masukkan kata sandi untuk membukanya:'
-    +'<span class="unlockrow"><input type="password" id="upass" placeholder="Kata sandi" aria-label="Kata sandi publikasi"><button class="btn" id="ubtn" type="button">Buka</button></span>');
-  $('ubtn').addEventListener('click',doUnlock);
-  $('upass').addEventListener('keydown',function(e){ if(e.key==='Enter') doUnlock(); });
-}
-function doUnlock(){
-  var p=$('upass').value; if(!p) return;
+function attemptUnlock(p){
+  if(!p) return;
   KP.decryptBundle(p,SHAREDPKG).then(function(b){
     try{localStorage.setItem('dashPass_v1',p);}catch(e){}
-    hideBanner(); applyBundle(b);
-  }).catch(function(){ showUnlock(true); });
+    onUnlocked(b);
+  }).catch(function(){ promptUnlock(true); });
+}
+function onUnlocked(b){
+  UNLOCKED=true; hideBanner();
+  var m=document.getElementById('lmsg'); if(m) m.style.display='none';
+  applyBundle(b); updateLockView();
+}
+function promptUnlock(wrong){
+  if(!DATA && document.getElementById('locked') && !LOCK_OPTOUT){
+    updateLockView();
+    var m=$('lmsg'); if(m) m.style.display=wrong?'block':'none';
+  } else {
+    showBanner('info',(wrong?'Kata sandi salah. ':'')+'Data publikasi dashboard tersedia (per '+fmtWhen(SHAREDPKG.at)+'). Masukkan kata sandi untuk membukanya:'
+      +'<span class="unlockrow"><input type="password" id="upass" placeholder="Kata sandi" aria-label="Kata sandi publikasi"><button class="btn" id="ubtn" type="button">Buka</button></span>');
+    $('ubtn').addEventListener('click',function(){attemptUnlock($('upass').value);});
+    $('upass').addEventListener('keydown',function(e){ if(e.key==='Enter') attemptUnlock($('upass').value); });
+  }
 }
 function applyBundle(bundle){
   var o=bundle[KEY];
-  if(!o || !o.rows || !o.rows.length){ if(DATA) renderAll(); return; }
+  if(!o || !o.rows || !o.rows.length){
+    if(!DATA) showBanner('info','Publikasi belum berisi data modul ini.');
+    else renderAll();
+    return;
+  }
   SHARED_MOD_AT=o.at||SHAREDPKG.at;
   var cand=fromPayload(o);
   if(!cand) return;
