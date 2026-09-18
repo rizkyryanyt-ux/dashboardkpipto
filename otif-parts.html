@@ -116,6 +116,9 @@ td.mono{white-space:nowrap;font-weight:600}
 .okmsg{display:flex;align-items:center;gap:10px;background:var(--green-soft);color:#067647;
   border-radius:12px;padding:14px 16px;font-size:13px;font-weight:700}
 footer{margin-top:18px;font-size:12px;color:var(--muted)}
+.unlockrow{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle;flex-wrap:wrap}
+.unlockrow input{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:13px;min-width:170px}
+.unlockrow input:focus{outline:2px solid var(--yellow);border-color:var(--yellow)}
 
 @media (max-width:960px){.rowgrid{grid-template-columns:1fr}}
 @media (max-width:880px){
@@ -136,22 +139,22 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
     <div><b>United Tractors</b><span>Cabang Sorong</span></div>
   </div>
   <nav aria-label="Navigasi modul">
-    <a href="index.html">
+    <a href="https://sites.google.com/view/dashboardkpipto/home" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"/></svg>
       Home</a>
-    <a class="active" href="otif-parts.html">
+    <a class="active" href="https://sites.google.com/view/dashboardkpipto/otif-parts" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
       OTIF Parts</a>
-    <a href="otif-service.html">
+    <a href="https://sites.google.com/view/dashboardkpipto/otif-service" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
       OTIF Service</a>
-    <a href="ostpo.html">
+    <a href="https://sites.google.com/view/dashboardkpipto/ostpo" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>
       OSTPO</a>
-    <a href="wo-tracking-parts.html">
+    <a href="https://sites.google.com/view/dashboardkpipto/wo-tracking-parts" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11"/><path d="M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>
       WO Tracking Parts</a>
-    <a href="lt-so-do.html">
+    <a href="https://sites.google.com/view/dashboardkpipto/lt-so-do" target="_top">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       LT SO DO</a>
   </nav>
@@ -332,6 +335,37 @@ var OTIFCore = (function(){
 })();
 if(typeof module!=='undefined') module.exports = OTIFCore;
 
+/* ===== KP: publikasi data terenkripsi (AES-GCM + PBKDF2) ===== */
+var KP = (function(){
+  var ITER = 150000;
+  function b64(buf){var a=new Uint8Array(buf.buffer||buf),s='';for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+  function unb64(s){var bin=atob(s),a=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+  function deriveKey(pass,salt,iter){
+    return crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey'])
+      .then(function(km){return crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:salt,iterations:iter,hash:'SHA-256'},
+        km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);});
+  }
+  function encryptBundle(pass,obj){
+    var salt=crypto.getRandomValues(new Uint8Array(16));
+    var iv=crypto.getRandomValues(new Uint8Array(12));
+    return deriveKey(pass,salt,ITER).then(function(k){
+      return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,new TextEncoder().encode(JSON.stringify(obj)));
+    }).then(function(ct){
+      return {v:1,enc:'AES-GCM',kdf:'PBKDF2-SHA256',iter:ITER,
+              salt:b64(salt),iv:b64(iv),ct:b64(ct),
+              at:new Date().toISOString(),modules:Object.keys(obj)};
+    });
+  }
+  function decryptBundle(pass,pkg){
+    return deriveKey(pass,unb64(pkg.salt),pkg.iter||ITER).then(function(k){
+      return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(pkg.iv)},k,unb64(pkg.ct));
+    }).then(function(pt){return JSON.parse(new TextDecoder().decode(pt));});
+  }
+  return {encryptBundle:encryptBundle,decryptBundle:decryptBundle};
+})();
+if(typeof module!=='undefined') module.exports.KP = KP;
+
 </script>
 <script>
 (function(){
@@ -357,14 +391,12 @@ if(typeof module!=='undefined') module.exports = OTIFCore;
       PERSIST_OK = true;
     }catch(e){ PERSIST_OK = false; }
   }
+  function fromPayload(o){
+    if(!o || !o.rows || !o.rows.length) return null;
+    return {file:o.file, at:o.at, months:o.months, rows:C.unpackRows(o.rows)};
+  }
   function restore(){
-    try{
-      var raw = localStorage.getItem(KEY);
-      if(!raw) return null;
-      var o = JSON.parse(raw);
-      if(!o || !o.rows || !o.rows.length) return null;
-      return {file:o.file, at:o.at, months:o.months, rows:C.unpackRows(o.rows)};
-    }catch(e){ return null; }
+    try{ return fromPayload(JSON.parse(localStorage.getItem(KEY))); }catch(e){ return null; }
   }
   function clearStored(){
     try{ localStorage.removeItem(KEY); }catch(e){}
@@ -412,8 +444,7 @@ if(typeof module!=='undefined') module.exports = OTIFCore;
     var when = at.toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
     var span = C.MLABEL[DATA.months[0]]+'–'+C.MLABEL[DATA.months[DATA.months.length-1]];
     $('dstat').innerHTML = '<b>'+esc(DATA.file)+'</b> — '+num(DATA.rows.length)+' baris order ('+span+' 2026), diupload '+when+' '
-      + (PERSIST_OK ? '<span class="badge ok">Tersimpan di perangkat ini</span>'
-                    : '<span class="badge warn">Hanya sesi ini — penyimpanan browser tidak tersedia</span>');
+      + badgeLine();
   }
 
   function renderPills(){
@@ -536,10 +567,58 @@ if(typeof module!=='undefined') module.exports = OTIFCore;
     }
   });
 
-  /* ---------- init ---------- */
-  DATA = restore();
-  if(DATA) SELECTED = defaultMonth(DATA.months);
-  renderAll();
+  function afterData(){ if(DATA && DATA.months) SELECTED = defaultMonth(DATA.months); }
+/* ---------- data publikasi (dashboard-data.json terenkripsi) ---------- */
+var SHAREDPKG=null, SHARED_MOD_AT=null;
+function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function persistBadgeS(ok){return ok?'<span class="badge ok">Tersimpan di perangkat ini</span>':'<span class="badge warn">Hanya sesi ini \u2014 penyimpanan browser tidak tersedia</span>';}
+function badgeLine(){
+  if(DATA && DATA.shared) return '<span class="badge ok">Data publikasi \u2014 dibagikan ke semua</span>';
+  var s=persistBadgeS(PERSIST_OK);
+  if(DATA && !DATA.shared && SHARED_MOD_AT && DATA.at && DATA.at>SHARED_MOD_AT)
+    s+=' <span class="badge warn">Lebih baru dari publikasi \u2014 publikasikan ulang di Home</span>';
+  return s;
+}
+function loadShared(){
+  if(typeof fetch==='undefined' || !window.crypto || !crypto.subtle) return;
+  fetch('dashboard-data.json?t='+Date.now(),{cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(pkg){ if(!pkg || !pkg.ct) throw 0; SHAREDPKG=pkg; tryUnlock(); })
+    .catch(function(){});
+}
+function tryUnlock(){
+  var pass=null; try{pass=localStorage.getItem('dashPass_v1');}catch(e){}
+  if(!pass){ showUnlock(false); return; }
+  KP.decryptBundle(pass,SHAREDPKG).then(applyBundle).catch(function(){ showUnlock(false); });
+}
+function showUnlock(wrong){
+  showBanner('info',(wrong?'Kata sandi salah. ':'')+'Data publikasi dashboard tersedia (per '+fmtWhen(SHAREDPKG.at)+'). Masukkan kata sandi untuk membukanya:'
+    +'<span class="unlockrow"><input type="password" id="upass" placeholder="Kata sandi" aria-label="Kata sandi publikasi"><button class="btn" id="ubtn" type="button">Buka</button></span>');
+  $('ubtn').addEventListener('click',doUnlock);
+  $('upass').addEventListener('keydown',function(e){ if(e.key==='Enter') doUnlock(); });
+}
+function doUnlock(){
+  var p=$('upass').value; if(!p) return;
+  KP.decryptBundle(p,SHAREDPKG).then(function(b){
+    try{localStorage.setItem('dashPass_v1',p);}catch(e){}
+    hideBanner(); applyBundle(b);
+  }).catch(function(){ showUnlock(true); });
+}
+function applyBundle(bundle){
+  var o=bundle[KEY];
+  if(!o || !o.rows || !o.rows.length){ if(DATA) renderAll(); return; }
+  SHARED_MOD_AT=o.at||SHAREDPKG.at;
+  var cand=fromPayload(o);
+  if(!cand) return;
+  if(!DATA || !DATA.at || (cand.at && cand.at>DATA.at)){
+    cand.shared=true; DATA=cand; afterData(); renderAll();
+  } else {
+    renderAll(); /* segarkan status supaya pengingat publikasi-ulang tampil */
+  }
+}
+function boot(){ DATA=restore(); afterData(); renderAll(); loadShared(); }
+boot();
+
 })();
 </script>
 </body>

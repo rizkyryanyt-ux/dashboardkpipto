@@ -144,6 +144,19 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
   .side-note{display:none}
   main{padding:18px 16px 22px}
 }
+
+.pub{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:22px 26px;margin-bottom:22px}
+.pub h3{font-size:16px;font-weight:800;margin-bottom:4px}
+.pub > p{font-size:13px;color:var(--muted);max-width:72ch}
+.pubrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.pubrow input{border:1.5px solid var(--line);border-radius:11px;padding:10px 13px;font-family:inherit;font-size:13px;min-width:230px;background:var(--card);color:var(--ink)}
+.pubrow input:focus{outline:2px solid var(--yellow);border-color:var(--yellow)}
+.pubrow .btn{border:0;cursor:pointer;font-family:inherit}
+.pubmod{font-size:12.5px;color:var(--muted);margin-top:7px}
+.pubmod b{color:#067647}
+.pmsg{font-size:12.5px;margin-top:10px;color:var(--muted)}
+.pmsg.ok{color:#067647;font-weight:600}
+.pmsg.err{color:#B42318;font-weight:600}
 </style>
 </head>
 <body>
@@ -196,6 +209,17 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
     <h2>Halo, Rizki Ryan Hermawan</h2>
     <p>Pantau OTIF, outstanding PO, pelacakan Work Order, dan lead time dalam satu tempat. Pilih modul di menu samping, upload file export SAP, dan KPI langsung terhitung.</p>
     <div class="c1"></div><div class="c2"></div>
+  </div>
+
+  <div class="pub">
+    <h3>Publikasi data untuk kolega</h3>
+    <p>Data yang sudah Anda upload di tiap modul bisa dibagikan ke semua kolega: kunci dengan kata sandi, unduh satu file publikasi, lalu upload file itu ke repo GitHub (Add file → Upload files → Commit). Kolega cukup memasukkan kata sandi sekali di perangkatnya.</p>
+    <div id="publist"></div>
+    <div class="pubrow">
+      <input type="password" id="ppass" placeholder="Kata sandi (min. 6 karakter)" aria-label="Kata sandi publikasi">
+      <button class="btn" id="pbtn" type="button">Unduh file publikasi</button>
+    </div>
+    <div class="pmsg" id="pmsg"></div>
   </div>
 
   <div class="section-title">Modul KPI</div>
@@ -255,5 +279,75 @@ footer{margin-top:20px;font-size:12px;color:var(--muted)}
   <footer>Dashboard KPI — Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Seluruh data diproses lokal di browser.</footer>
 </main>
 
+<script>
+/* ===== KP: publikasi data terenkripsi (AES-GCM + PBKDF2) ===== */
+var KP = (function(){
+  var ITER = 150000;
+  function b64(buf){var a=new Uint8Array(buf.buffer||buf),s='';for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+  function unb64(s){var bin=atob(s),a=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+  function deriveKey(pass,salt,iter){
+    return crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey'])
+      .then(function(km){return crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:salt,iterations:iter,hash:'SHA-256'},
+        km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);});
+  }
+  function encryptBundle(pass,obj){
+    var salt=crypto.getRandomValues(new Uint8Array(16));
+    var iv=crypto.getRandomValues(new Uint8Array(12));
+    return deriveKey(pass,salt,ITER).then(function(k){
+      return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,new TextEncoder().encode(JSON.stringify(obj)));
+    }).then(function(ct){
+      return {v:1,enc:'AES-GCM',kdf:'PBKDF2-SHA256',iter:ITER,
+              salt:b64(salt),iv:b64(iv),ct:b64(ct),
+              at:new Date().toISOString(),modules:Object.keys(obj)};
+    });
+  }
+  function decryptBundle(pass,pkg){
+    return deriveKey(pass,unb64(pkg.salt),pkg.iter||ITER).then(function(k){
+      return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(pkg.iv)},k,unb64(pkg.ct));
+    }).then(function(pt){return JSON.parse(new TextDecoder().decode(pt));});
+  }
+  return {encryptBundle:encryptBundle,decryptBundle:decryptBundle};
+})();
+if(typeof module!=='undefined') module.exports.KP = KP;
+
+</script>
+<script>
+
+(function(){
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+var KEYS=[['otifParts_v1','OTIF Parts'],['otifService_v1','OTIF Service'],['ostpo_v1','OSTPO'],['woTrack_v1','WO Tracking Parts'],['ltSoDo_v1','LT SO DO']];
+function payload(k){try{var o=JSON.parse(localStorage.getItem(k));return (o&&o.rows&&o.rows.length)?o:null;}catch(e){return null;}}
+function renderList(){
+  var html='';
+  KEYS.forEach(function(kv){var o=payload(kv[0]);
+    html+='<div class="pubmod">'+kv[1]+': '+(o?('<b>siap</b> \u2014 data per '+fmtWhen(o.at)):'belum ada data di perangkat ini')+'</div>';});
+  $('publist').innerHTML=html;
+}
+function msg(html,cls){var m=$('pmsg');m.className='pmsg'+(cls?' '+cls:'');m.innerHTML=html;}
+$('pbtn').addEventListener('click',function(){
+  var pass=$('ppass').value;
+  if(pass.length<6){msg('Kata sandi minimal 6 karakter.','err');return;}
+  if(!window.crypto||!crypto.subtle){msg('Browser ini tidak mendukung enkripsi \u2014 gunakan Chrome atau Edge terbaru.','err');return;}
+  var obj={},cnt=0;
+  KEYS.forEach(function(kv){var o=payload(kv[0]);if(o){obj[kv[0]]=o;cnt++;}});
+  if(!cnt){msg('Belum ada data modul di perangkat ini. Upload file Excel di halaman modul terlebih dulu.','err');return;}
+  msg('Mengunci data\u2026');
+  KP.encryptBundle(pass,obj).then(function(pkg){
+    try{localStorage.setItem('dashPass_v1',pass);}catch(e){}
+    var blob=new Blob([JSON.stringify(pkg)],{type:'application/json'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dashboard-data.json';
+    document.body.appendChild(a);a.click();a.remove();
+    renderList();
+    msg('File <b>dashboard-data.json</b> terunduh ('+cnt+' modul terkunci). Upload ke repo GitHub: Add file \u2192 Upload files \u2192 Commit changes. Bagikan kata sandinya ke kolega secara internal (jangan lewat tempat publik).','ok');
+  }).catch(function(e){msg('Gagal membuat file: '+esc(e && e.message ? e.message : String(e)),'err');});
+});
+try{var sp=localStorage.getItem('dashPass_v1');if(sp)$('ppass').value=sp;}catch(e){}
+renderList();
+})();
+
+</script>
 </body>
 </html>

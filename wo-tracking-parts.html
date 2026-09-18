@@ -137,6 +137,9 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
 .chip.gray{background:#EEF1F4;color:#5D6066}
 .chip.green{background:var(--green-soft);color:#067647}
 .kcard .val.sm{font-size:22px;line-height:1.2;padding-top:4px}
+.unlockrow{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle;flex-wrap:wrap}
+.unlockrow input{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:13px;min-width:170px}
+.unlockrow input:focus{outline:2px solid var(--yellow);border-color:var(--yellow)}
 </style>
 </head>
 <body>
@@ -458,6 +461,37 @@ var WOCore = (function(){
 
 if(typeof module!=='undefined') module.exports={KU:KU,SVCCore:SVCCore,LTCore:LTCore,OSTPOCore:OSTPOCore,WOCore:WOCore};
 
+/* ===== KP: publikasi data terenkripsi (AES-GCM + PBKDF2) ===== */
+var KP = (function(){
+  var ITER = 150000;
+  function b64(buf){var a=new Uint8Array(buf.buffer||buf),s='';for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+  function unb64(s){var bin=atob(s),a=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+  function deriveKey(pass,salt,iter){
+    return crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey'])
+      .then(function(km){return crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:salt,iterations:iter,hash:'SHA-256'},
+        km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);});
+  }
+  function encryptBundle(pass,obj){
+    var salt=crypto.getRandomValues(new Uint8Array(16));
+    var iv=crypto.getRandomValues(new Uint8Array(12));
+    return deriveKey(pass,salt,ITER).then(function(k){
+      return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,new TextEncoder().encode(JSON.stringify(obj)));
+    }).then(function(ct){
+      return {v:1,enc:'AES-GCM',kdf:'PBKDF2-SHA256',iter:ITER,
+              salt:b64(salt),iv:b64(iv),ct:b64(ct),
+              at:new Date().toISOString(),modules:Object.keys(obj)};
+    });
+  }
+  function decryptBundle(pass,pkg){
+    return deriveKey(pass,unb64(pkg.salt),pkg.iter||ITER).then(function(k){
+      return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(pkg.iv)},k,unb64(pkg.ct));
+    }).then(function(pt){return JSON.parse(new TextDecoder().decode(pt));});
+  }
+  return {encryptBundle:encryptBundle,decryptBundle:decryptBundle};
+})();
+if(typeof module!=='undefined') module.exports.KP = KP;
+
 </script>
 <script>
 
@@ -502,9 +536,9 @@ function stChip(st){
   if(st==='SUPPLIED')return '<span class="chip green">SUPPLIED</span>';
   return '<span class="chip dark">'+esc(st)+'</span>';}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify({file:DATA.file,at:DATA.at,rows:C.pack(DATA.rows)}));PERSIST_OK=true;}catch(e){PERSIST_OK=false;}}
-function restore(){try{var raw=localStorage.getItem(KEY);if(!raw)return null;var o=JSON.parse(raw);
-  if(!o||!o.rows||!o.rows.length)return null;
-  return {file:o.file,at:o.at,rows:C.unpack(o.rows)};}catch(e){return null;}}
+function fromPayload(o){if(!o||!o.rows||!o.rows.length)return null;
+  return {file:o.file,at:o.at,rows:C.unpack(o.rows)};}
+function restore(){try{return fromPayload(JSON.parse(localStorage.getItem(KEY)));}catch(e){return null;}}
 window.handleFile=function(f){var rd=new FileReader();rd.onload=function(ev){try{
   var wb=XLSX.read(ev.target.result,{type:'array'});
   var res=C.parseWorkbook(XLSX,wb);
@@ -519,7 +553,7 @@ window.renderAll=function(){var has=DATA&&DATA.rows.length;
   C.withAge(DATA.rows,todayUTC());
   renderStatus();renderDash();};
 function renderStatus(){
-  $('dstat').innerHTML='<b>'+esc(DATA.file)+'</b> \u2014 '+num(DATA.rows.length)+' baris item, diupload '+whenStr(DATA.at)+' '+persistBadge(PERSIST_OK);}
+  $('dstat').innerHTML='<b>'+esc(DATA.file)+'</b> \u2014 '+num(DATA.rows.length)+' baris item, diupload '+whenStr(DATA.at)+' '+badgeLine();}
 function renderDash(){
   var a=C.agg(DATA.rows);
   $('vWait').textContent=num(a.wait);
@@ -559,8 +593,58 @@ function renderTable(){
     +'<th>SLOC</th><th>Work Order</th><th>Customer</th><th>Part Number</th><th>Deskripsi</th><th>Kurang</th><th>Stok</th><th>Status</th><th>Aging</th><th>Keterangan</th>'
     +'</tr></thead><tbody>'+tr+'</tbody></table></div>';}
 bindCommonEvents();
-DATA=restore();
-renderAll();
+function afterData(){}
+/* ---------- data publikasi (dashboard-data.json terenkripsi) ---------- */
+var SHAREDPKG=null, SHARED_MOD_AT=null;
+function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function persistBadgeS(ok){return ok?'<span class="badge ok">Tersimpan di perangkat ini</span>':'<span class="badge warn">Hanya sesi ini \u2014 penyimpanan browser tidak tersedia</span>';}
+function badgeLine(){
+  if(DATA && DATA.shared) return '<span class="badge ok">Data publikasi \u2014 dibagikan ke semua</span>';
+  var s=persistBadgeS(PERSIST_OK);
+  if(DATA && !DATA.shared && SHARED_MOD_AT && DATA.at && DATA.at>SHARED_MOD_AT)
+    s+=' <span class="badge warn">Lebih baru dari publikasi \u2014 publikasikan ulang di Home</span>';
+  return s;
+}
+function loadShared(){
+  if(typeof fetch==='undefined' || !window.crypto || !crypto.subtle) return;
+  fetch('dashboard-data.json?t='+Date.now(),{cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(pkg){ if(!pkg || !pkg.ct) throw 0; SHAREDPKG=pkg; tryUnlock(); })
+    .catch(function(){});
+}
+function tryUnlock(){
+  var pass=null; try{pass=localStorage.getItem('dashPass_v1');}catch(e){}
+  if(!pass){ showUnlock(false); return; }
+  KP.decryptBundle(pass,SHAREDPKG).then(applyBundle).catch(function(){ showUnlock(false); });
+}
+function showUnlock(wrong){
+  showBanner('info',(wrong?'Kata sandi salah. ':'')+'Data publikasi dashboard tersedia (per '+fmtWhen(SHAREDPKG.at)+'). Masukkan kata sandi untuk membukanya:'
+    +'<span class="unlockrow"><input type="password" id="upass" placeholder="Kata sandi" aria-label="Kata sandi publikasi"><button class="btn" id="ubtn" type="button">Buka</button></span>');
+  $('ubtn').addEventListener('click',doUnlock);
+  $('upass').addEventListener('keydown',function(e){ if(e.key==='Enter') doUnlock(); });
+}
+function doUnlock(){
+  var p=$('upass').value; if(!p) return;
+  KP.decryptBundle(p,SHAREDPKG).then(function(b){
+    try{localStorage.setItem('dashPass_v1',p);}catch(e){}
+    hideBanner(); applyBundle(b);
+  }).catch(function(){ showUnlock(true); });
+}
+function applyBundle(bundle){
+  var o=bundle[KEY];
+  if(!o || !o.rows || !o.rows.length){ if(DATA) renderAll(); return; }
+  SHARED_MOD_AT=o.at||SHAREDPKG.at;
+  var cand=fromPayload(o);
+  if(!cand) return;
+  if(!DATA || !DATA.at || (cand.at && cand.at>DATA.at)){
+    cand.shared=true; DATA=cand; afterData(); renderAll();
+  } else {
+    renderAll(); /* segarkan status supaya pengingat publikasi-ulang tampil */
+  }
+}
+function boot(){ DATA=restore(); afterData(); renderAll(); loadShared(); }
+boot();
+
 })();
 
 </script>
