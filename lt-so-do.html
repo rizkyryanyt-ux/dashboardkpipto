@@ -182,7 +182,7 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       LT SO DO</a>
   </nav>
-  <div class="side-note"><b>Data aman</b>Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 29/09/2026</div>
+  <div class="side-note"><b>Data aman</b>Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 29/09/2026 r2</div>
 </aside>
 
 <main>
@@ -252,32 +252,6 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
       </div>
       <div id="ltMissBody"></div>
     </div>
-    <div class="ctitle" style="margin:6px 0 13px">OTIF SO–DO <small>referensi SAP</small></div>
-    <div class="cards">
-      <div class="kcard hero"><div class="lbl">OTIF by Sales Order</div><div class="val" id="vSo">—</div><div class="det" id="dSo"></div></div>
-      <div class="kcard"><div class="lbl">OTIF by Item</div><div class="val" id="vItem">—</div><div class="det" id="dItem"></div></div>
-      <div class="kcard"><div class="lbl">Lead Time Rata-rata</div><div class="val" id="vLt">—</div><div class="det">dari SO dibuat sampai DO dibuat</div></div>
-      <div class="kcard"><div class="lbl">Total SO</div><div class="val" id="vTot">—</div><div class="det" id="dTot"></div></div>
-    </div>
-    <div class="rowgrid">
-      <div class="card">
-        <div class="ctitle">Tren OTIF 2026 <small>% per bulan — klik batang untuk pindah periode</small></div>
-        <div id="chart"></div>
-        <div class="legend"><span><i style="background:#FFC20E"></i>OTIF by SO</span><span><i style="background:#545A63"></i>OTIF by Item</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Per lokasi <small id="slocSub"></small></div>
-        <div id="sloc"></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="tblhead">
-        <div class="ctitle" id="missTitle">Item tidak OTIF</div>
-        <span class="count" id="missCount">0</span>
-      </div>
-      <div id="missBody"></div>
-    </div>
-
     <footer id="foot"></footer>
   </div>
 
@@ -655,13 +629,9 @@ function renderPills(){
   $('pills').querySelectorAll('.pill').forEach(function(b){b.addEventListener('click',function(){
     SELECTED=b.dataset.m==='YTD'?'YTD':+b.dataset.m;renderPills();renderDash();});});}
 function renderDash(){
-  var rows=C.byMonth(DATA.rows,SELECTED),a=C.agg(rows);
-  $('vSo').textContent=pct(a.pSo);$('dSo').textContent=num(a.soY)+' dari '+num(a.soN)+' SO';
-  $('vItem').textContent=pct(a.pItem);$('dItem').textContent=num(a.y)+' dari '+num(a.n)+' item';
-  $('vLt').textContent=fmtLt(a.avgLt);
-  $('vTot').textContent=num(a.soN);$('dTot').textContent=num(a.n)+' item order \u2014 '+perLabel();
-  renderLT(rows);renderChart();renderSloc(rows);renderMisses(rows);
-  $('foot').textContent='Dashboard KPI \u2014 Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Data diproses lokal di browser. Versi 29/09/2026.';}
+  var rows=C.byMonth(DATA.rows,SELECTED);
+  renderLT(rows);
+  $('foot').textContent='Dashboard KPI \u2014 Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Data diproses lokal di browser. Versi 29/09/2026 r2.';}
 function fmtMin(m){if(m==null)return '\u2014';
   if(m>=60)return Math.floor(m/60)+' j '+Math.round(m%60)+' mnt';
   return (Math.round(m*10)/10).toLocaleString('id-ID')+' mnt';}
@@ -712,48 +682,6 @@ function renderLTMisses(rows){
       +'<td class="mono">W'+r.wk+'</td><td class="mono" style="font-weight:700">'+fmtMin(r.sodo)+'</td></tr>';});
   $('ltMissBody').innerHTML='<div class="twrap"><table><thead><tr>'
     +'<th>Sales Order</th><th>Reff Customer</th><th>Part Number</th><th>Deskripsi</th><th>ItCa</th><th>SLOC</th><th>Week</th><th>LT SO\u2013DO</th>'
-    +'</tr></thead><tbody>'+tr+'</tbody></table></div>';}
-function renderChart(){
-  var W=640,H=210,padL=34,padR=8,padT=16,padB=26,iw=W-padL-padR,ih=H-padT-padB;
-  var ms=DATA.months,slot=iw/ms.length,bw=Math.min(19,slot*0.28),gap=4,s='';
-  [0,25,50,75,100].forEach(function(g){var y=padT+ih*(1-g/100);
-    s+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="#EDF0F3"/>';
-    s+='<text x="'+(padL-8)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="#9AA1AB">'+g+'</text>';});
-  ms.forEach(function(m,i){
-    var a=C.agg(C.byMonth(DATA.rows,m)),act=(SELECTED===m||SELECTED==='YTD');
-    var cx=padL+slot*i+slot/2;
-    s+='<g class="cbar" data-m="'+m+'" style="cursor:pointer">'
-     +'<rect x="'+(padL+slot*i)+'" y="'+padT+'" width="'+slot+'" height="'+ih+'" fill="transparent"/>';
-    [[a.pSo||0,(act?'#FFC20E':'#F1E3B0')],[a.pItem||0,(act?'#545A63':'#D8DBDF')]].forEach(function(p,j){
-      var v=p[0],bh=ih*v/100,x=cx-bw-gap/2+j*(bw+gap),y=padT+ih-bh;
-      s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+Math.max(bh,2)+'" rx="4" fill="'+p[1]+'"/>'
-       +'<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="8.5" font-weight="700" fill="'+(act?'#22262B':'#9AA1AB')+'">'+v.toFixed(0)+'</text>';});
-    s+='<text x="'+cx+'" y="'+(H-8)+'" text-anchor="middle" font-size="10" font-weight="'+(act?'800':'600')+'" fill="'+(act?'#22262B':'#9AA1AB')+'">'+KU.MLABEL[m]+'</text></g>';});
-  $('chart').innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block" role="img" aria-label="Tren OTIF per bulan">'+s+'</svg>';
-  $('chart').querySelectorAll('.cbar').forEach(function(g){g.addEventListener('click',function(){
-    SELECTED=+g.dataset.m;renderPills();renderDash();});});}
-function renderSloc(rows){
-  $('slocSub').textContent='OTIF by item \u2014 '+perLabel();
-  var list=C.bySloc(rows);
-  if(!list.length){$('sloc').innerHTML='<div style="font-size:13px;color:var(--muted)">Tidak ada data.</div>';return;}
-  var html='';
-  list.forEach(function(s){html+='<div class="slocrow"><div class="t"><div>'+esc(s.sloc)+' \u2014 '+esc(SLOCNAME[s.sloc]||s.sloc)+'</div>'
-    +'<div>'+s.p.toFixed(2)+'% <span>('+num(s.y)+'/'+num(s.n)+')</span></div></div>'
-    +'<div class="track"><div class="fill" style="width:'+s.p.toFixed(2)+'%"></div></div></div>';});
-  $('sloc').innerHTML=html;}
-function renderMisses(rows){
-  var ms=C.misses(rows);
-  $('missTitle').textContent='Item tidak OTIF \u2014 '+perLabel();
-  var cEl=$('missCount');cEl.textContent=num(ms.length)+' item';cEl.className='count'+(ms.length?'':' zero');
-  if(!ms.length){$('missBody').innerHTML='<div class="okmsg">Semua item OTIF pada periode ini.</div>';return;}
-  var tr='';
-  ms.forEach(function(r){
-    var doCell=r.doD?('<td class="mono">'+esc(r.doD)+'</td>'):'<td><span class="chip dark">Belum DO</span></td>';
-    tr+='<tr><td class="mono">'+esc(r.so)+'</td><td>'+esc(r.cust)+'</td><td class="mono">'+esc(r.mat)+'</td>'
-      +'<td>'+esc(r.desc)+'</td><td class="mono">'+esc(r.oq)+'</td><td class="mono">'+esc(r.sloc)+'</td>'
-      +'<td class="mono">'+esc(r.crd)+'</td>'+doCell+'</tr>';});
-  $('missBody').innerHTML='<div class="twrap"><table><thead><tr>'
-    +'<th>Sales Order</th><th>Reff Customer</th><th>Part Number</th><th>Deskripsi</th><th>Qty</th><th>SLOC</th><th>CRD</th><th>Tgl DO</th>'
     +'</tr></thead><tbody>'+tr+'</tbody></table></div>';}
 bindCommonEvents();
 function afterData(){if(DATA&&DATA.months)SELECTED=defaultMonth(DATA.months);}
