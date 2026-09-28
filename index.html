@@ -193,7 +193,7 @@ details.pub[open] summary{margin-bottom:10px;color:var(--ink)}
   </nav>
   <div class="side-note">
     <b>Data aman</b>
-    Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 22/09/2026
+    Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 29/09/2026
   </div>
 </aside>
 
@@ -291,7 +291,7 @@ details.pub[open] summary{margin-bottom:10px;color:var(--ink)}
 
   </div>
 
-  <footer>Dashboard KPI — Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Seluruh data diproses lokal di browser. Versi 22/09/2026.</footer>
+  <footer>Dashboard KPI — Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Seluruh data diproses lokal di browser. Versi 29/09/2026.</footer>
 </main>
 
 <script>
@@ -333,7 +333,7 @@ if(typeof module!=='undefined') module.exports.KP = KP;
 var $=function(id){return document.getElementById(id);};
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function fmtWhen(at){return new Date(at).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
-var KEYS=[['otifParts_v1','OTIF Parts'],['otifService_v1','OTIF Service'],['ostpo_v1','OSTPO'],['woTrack_v1','WO Tracking Parts'],['ltSoDo_v1','LT SO DO']];
+var KEYS=[['otifParts_v1','OTIF Parts'],['otifService_v1','OTIF Service'],['ostpo_v1','OSTPO'],['woTrack_v1','WO Tracking Parts'],['ltSoDo_v2','LT SO DO']];
 function payload(k){try{var o=JSON.parse(localStorage.getItem(k));return (o&&o.rows&&o.rows.length)?o:null;}catch(e){return null;}}
 function renderList(){
   var html='';

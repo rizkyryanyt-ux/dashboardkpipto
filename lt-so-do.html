@@ -182,14 +182,14 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       LT SO DO</a>
   </nav>
-  <div class="side-note"><b>Data aman</b>Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 22/09/2026</div>
+  <div class="side-note"><b>Data aman</b>Seluruh file diproses lokal di browser. Tidak ada data yang diunggah ke server. · Versi 29/09/2026</div>
 </aside>
 
 <main>
   <div class="topbar">
     <div>
       <h1>LT SO DO</h1>
-      <div class="sub">Lead time Sales Order → Delivery Order</div>
+      <div class="sub">Performance Lead Time COP — SO→DO & DO→TO</div>
     </div>
     <div class="user">
       <div class="ava">RR</div>
@@ -227,6 +227,32 @@ footer{margin-top:18px;font-size:12px;color:var(--muted)}
     </div>
 
     <div class="pills" id="pills"></div>
+    <div class="cards">
+      <div class="kcard hero"><div class="lbl">%LT SO – DO</div><div class="val" id="vSodo">—</div><div class="det" id="dSodo"></div></div>
+      <div class="kcard"><div class="lbl">%LT DO – TO</div><div class="val" id="vDoto">—</div><div class="det" id="dDoto"></div></div>
+      <div class="kcard"><div class="lbl">Target Cabang</div><div class="val sm">SO–DO ≤ 60 mnt</div><div class="det">DO–TO ≤ 30 menit</div></div>
+      <div class="kcard"><div class="lbl">Baris Item</div><div class="val" id="vTrx">—</div><div class="det" id="dTrx"></div></div>
+    </div>
+    <div class="rowgrid">
+      <div class="card">
+        <div class="ctitle">Performance Lead Time COP <small id="ltSub"></small></div>
+        <div id="ltTable"></div>
+        <div class="legend" style="margin-top:10px">Rules: ItCa ZPFU/ZPIH/ZBIH dihitung SO–DO & DO–TO · ItCa lainnya hanya DO–TO</div>
+      </div>
+      <div class="card">
+        <div class="ctitle">%LT per minggu <small>Week 1–4 dari tanggal order (1–7, 8–14, 15–21, 22–akhir)</small></div>
+        <div id="wchart"></div>
+        <div class="legend"><span><i style="background:#FFC20E"></i>SO–DO</span><span><i style="background:#545A63"></i>DO–TO</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="tblhead">
+        <div class="ctitle" id="ltMissTitle">Transaksi lewat target SO–DO</div>
+        <span class="count" id="ltMissCount">0</span>
+      </div>
+      <div id="ltMissBody"></div>
+    </div>
+    <div class="ctitle" style="margin:6px 0 13px">OTIF SO–DO <small>referensi SAP</small></div>
     <div class="cards">
       <div class="kcard hero"><div class="lbl">OTIF by Sales Order</div><div class="val" id="vSo">—</div><div class="det" id="dSo"></div></div>
       <div class="kcard"><div class="lbl">OTIF by Item</div><div class="val" id="vItem">—</div><div class="det" id="dItem"></div></div>
@@ -339,36 +365,62 @@ var SVCCore = (function(){
   return {parseWorkbook:parseWorkbook,byMonth:byMonth,agg:agg,byJob:byJob,misses:misses,pack:pack,unpack:unpack};
 })();
 
-/* ===== LTCore: LT SO DO (sheet bulanan; OTIF per item & per SO; lead time jam) ===== */
+/* ===== LTCore: LT SO DO — Performance Lead Time COP (rules resmi) + OTIF referensi SAP =====
+   Rules: ItCa ZPFU/ZPIH/ZBIH -> hitung SO-DO & DO-TO; ItCa lain -> hanya DO-TO.
+   Target CABANG: SO-DO <= 60 mnt, DO-TO <= 30 mnt. Week dari tanggal order: 1-7/8-14/15-21/22-akhir. */
 var LTCore = (function(){
-  var NEED=['Sales Doc.','OTIF','Order Quantity','Material','Item Description','Location','CRD Date','Days','Times','Delivery Quantity','Customer Reference'];
+  var NEED=['Sales Doc.','OTIF','Order Quantity','Material','Item Description','Location','CRD Date','Days','Times','Delivery Quantity','Customer Reference','ItCa','TO Number'];
+  var FIRST={ZPFU:1,ZPIH:1,ZBIH:1};
+  var SODO_T=60, DOTO_T=30;
+  function tsMin(dv,tv){                    /* menit sejak epoch, dari 'dd/mm/yyyy' + 'hh:mm:ss' */
+    var d=KU.toMs(dv); if(d==null) return null;
+    var t=KU.clean(tv), m=t.match(/^(\d+):(\d+):(\d+)$/);
+    var mins=d/60000;
+    if(m) mins+=(+m[1])*60+(+m[2])+(+m[3])/60;
+    return mins;
+  }
+  function nextIdx(hrow,from,label){
+    for(var c=from+1;c<hrow.length;c++){ if(KU.clean(hrow[c])===label) return c; }
+    return null;
+  }
   function parseWorkbook(X,wb){
     var out={rows:[],months:[],warnings:[]};
     wb.SheetNames.forEach(function(sn){
-      var m=KU.MONTHS[KU.clean(sn).toUpperCase()];
-      if(m==null){out.warnings.push('Sheet "'+sn+'" dilewati (bukan nama bulan).');return;}
       var aoa=KU.aoaOf(X,wb,sn), h=KU.findHeader(aoa,NEED);
       if(!h){out.warnings.push('Sheet "'+sn+'" dilewati (header LT SO DO tidak ditemukan).');return;}
-      var N=h.names, doIdx=null;
-      for(var c=N['Delivery Quantity']+1;c<h.row.length;c++){
-        if(KU.clean(h.row[c])==='Created On'){doIdx=c;break;}
-      }
+      var N=h.names;
+      var mSheet=KU.MONTHS[KU.clean(sn).toUpperCase()]; if(mSheet==null) mSheet=-1;
+      var soD=N['Created On'], soTm=nextIdx(h.row,soD,'Time');
+      var doD=nextIdx(h.row,N['Delivery Quantity'],'Created On'), doTm=doD!=null?nextIdx(h.row,doD,'Time'):null;
+      var toD=nextIdx(h.row,N['TO Number'],'Created On'), toTm=toD!=null?nextIdx(h.row,toD,'Time'):null;
       var cnt=0;
       for(var i=h.idx+1;i<aoa.length;i++){
         var r=aoa[i]||[]; if(KU.clean(r[N['Sales Doc.']])==='') continue;
+        var so=tsMin(r[soD],r[soTm]), doo=tsMin(r[doD],r[doTm]), to=tsMin(r[toD],r[toTm]);
+        var itca=KU.clean(r[N['ItCa']]).toUpperCase();
+        var sodo=(FIRST[itca] && so!=null && doo!=null)? doo-so : null;
+        var doto=(doo!=null && to!=null)? to-doo : null;
+        var baseMs=(so!=null?so:doo); baseMs=(baseMs!=null)?baseMs*60000:KU.toMs(r[N['CRD Date']]);
+        if(baseMs==null) continue;
+        var bd=new Date(baseMs);
+        var m=(mSheet>=0)?mSheet:bd.getUTCMonth();
+        var day=bd.getUTCDate(), wk=day<=7?1:day<=14?2:day<=21?3:4;
         var hh=0, t=KU.clean(r[N['Times']]), tm=t.match(/^(\d+):(\d+):(\d+)$/);
         if(tm) hh=(+tm[1])+(+tm[2])/60+(+tm[3])/3600;
-        var doD=(doIdx!=null)?KU.clean(r[doIdx]):''; if(doD==='00/00/0000')doD='';
-        var crd=KU.clean(r[N['CRD Date']]); if(crd==='00/00/0000')crd='';
+        var doDate=KU.clean(r[doD]); if(doDate==='00/00/0000') doDate='';
+        var crd=KU.clean(r[N['CRD Date']]); if(crd==='00/00/0000') crd='';
         out.rows.push({m:m,so:KU.clean(r[N['Sales Doc.']]),cust:KU.clean(r[N['Customer Reference']]),
           mat:KU.clean(r[N['Material']]),desc:KU.clean(r[N['Item Description']]),
           oq:KU.clean(r[N['Order Quantity']]),sloc:KU.clean(r[N['Location']]),
-          doD:doD,crd:crd,y:KU.isY(r[N['OTIF']])?1:0,
-          lt:KU.num(r[N['Days']])*24+hh});
+          doD:doDate,crd:crd,y:KU.isY(r[N['OTIF']])?1:0,
+          lt:KU.num(r[N['Days']])*24+hh,
+          itca:itca,wk:wk,
+          sodo:(sodo!=null)?Math.round(sodo*100)/100:null,
+          doto:(doto!=null)?Math.round(doto*100)/100:null});
+        if(out.months.indexOf(m)<0) out.months.push(m);
         cnt++;
       }
-      if(cnt>0 && out.months.indexOf(m)<0) out.months.push(m);
-      else if(cnt===0) out.warnings.push('Sheet "'+sn+'" kosong (0 baris data).');
+      if(cnt===0) out.warnings.push('Sheet "'+sn+'" kosong (0 baris data).');
     });
     out.months.sort(function(a,b){return a-b;});
     return out;
@@ -380,15 +432,33 @@ var LTCore = (function(){
     var soN=0,soY=0;
     Object.keys(mp).forEach(function(k){soN++;var all=true;mp[k].forEach(function(v){if(!v)all=false;});if(all)soY++;});
     return {n:n,y:y,pItem:n?y/n*100:null,soN:soN,soY:soY,pSo:soN?soY/soN*100:null,avgLt:n?lt/n:null};}
-  function bySo(rows,m){ /* per-bulan SO stats utk chart */
-    var a=agg(byMonth(rows,m)); return a; }
+  function aggLT(rows){
+    var sN=0,sOk=0,dN=0,dOk=0;
+    rows.forEach(function(r){
+      if(r.sodo!=null){sN++; if(r.sodo<=SODO_T)sOk++;}
+      if(r.doto!=null){dN++; if(r.doto<=DOTO_T)dOk++;}
+    });
+    return {sN:sN,sOk:sOk,sBad:sN-sOk,pS:sN?sOk/sN*100:null,
+            dN:dN,dOk:dOk,dBad:dN-dOk,pD:dN?dOk/dN*100:null,
+            tS:SODO_T,tD:DOTO_T};}
+  function byWeek(rows){
+    var out=[];
+    [1,2,3,4].forEach(function(w){
+      var a=aggLT(rows.filter(function(r){return r.wk===w;}));
+      a.wk=w; out.push(a);
+    });
+    return out;}
+  function ltMisses(rows){
+    return rows.filter(function(r){return r.sodo!=null && r.sodo>SODO_T;})
+      .sort(function(a,b){return b.sodo-a.sodo;});}
   function bySloc(rows){var mp={};
     rows.forEach(function(r){var k=r.sloc||'—'; if(!mp[k])mp[k]={n:0,y:0}; mp[k].n++; mp[k].y+=r.y;});
     return Object.keys(mp).sort().map(function(k){return {sloc:k,n:mp[k].n,y:mp[k].y,p:mp[k].y/mp[k].n*100};});}
   function misses(rows){return rows.filter(function(r){return !r.y;});}
-  function pack(rows){return rows.map(function(r){return [r.m,r.so,r.cust,r.mat,r.desc,r.oq,r.sloc,r.doD,r.crd,r.y,Math.round(r.lt*100)/100];});}
-  function unpack(a){return a.map(function(x){return {m:x[0],so:x[1],cust:x[2],mat:x[3],desc:x[4],oq:x[5],sloc:x[6],doD:x[7],crd:x[8],y:x[9],lt:x[10]};});}
-  return {parseWorkbook:parseWorkbook,byMonth:byMonth,agg:agg,bySo:bySo,bySloc:bySloc,misses:misses,pack:pack,unpack:unpack};
+  function pack(rows){return rows.map(function(r){return [r.m,r.so,r.cust,r.mat,r.desc,r.oq,r.sloc,r.doD,r.crd,r.y,Math.round(r.lt*100)/100,r.itca,r.wk,r.sodo,r.doto];});}
+  function unpack(a){return a.map(function(x){return {m:x[0],so:x[1],cust:x[2],mat:x[3],desc:x[4],oq:x[5],sloc:x[6],doD:x[7],crd:x[8],y:x[9],lt:x[10],itca:x[11],wk:x[12],sodo:x[13],doto:x[14]};});}
+  return {parseWorkbook:parseWorkbook,byMonth:byMonth,agg:agg,aggLT:aggLT,byWeek:byWeek,ltMisses:ltMisses,
+          bySloc:bySloc,misses:misses,pack:pack,unpack:unpack,SODO_T:SODO_T,DOTO_T:DOTO_T};
 })();
 
 /* ===== OSTPOCore: Outstanding PO (nilai cache Excel + aging live) ===== */
@@ -550,7 +620,7 @@ function bindCommonEvents(){
 }
 
 (function(){
-var C=LTCore, KEY='ltSoDo_v1', DATA=null, SELECTED=null, PERSIST_OK=true;
+var C=LTCore, KEY='ltSoDo_v2', DATA=null, SELECTED=null, PERSIST_OK=true;
 window.KEY=KEY;
 var SLOCNAME={PSRG:'Sorong',PABN:'Ambon',PMNK:'Manokwari'};
 function perLabel(){return SELECTED==='YTD'?'YTD (semua bulan)':KU.MFULL[SELECTED]+' 2026';}
@@ -590,8 +660,59 @@ function renderDash(){
   $('vItem').textContent=pct(a.pItem);$('dItem').textContent=num(a.y)+' dari '+num(a.n)+' item';
   $('vLt').textContent=fmtLt(a.avgLt);
   $('vTot').textContent=num(a.soN);$('dTot').textContent=num(a.n)+' item order \u2014 '+perLabel();
-  renderChart();renderSloc(rows);renderMisses(rows);
-  $('foot').textContent='Dashboard KPI \u2014 Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Data diproses lokal di browser. Versi 22/09/2026.';}
+  renderLT(rows);renderChart();renderSloc(rows);renderMisses(rows);
+  $('foot').textContent='Dashboard KPI \u2014 Rizki Ryan Hermawan, PT United Tractors Tbk Cabang Sorong. Data diproses lokal di browser. Versi 29/09/2026.';}
+function fmtMin(m){if(m==null)return '\u2014';
+  if(m>=60)return Math.floor(m/60)+' j '+Math.round(m%60)+' mnt';
+  return (Math.round(m*10)/10).toLocaleString('id-ID')+' mnt';}
+function renderLT(rows){
+  var a=C.aggLT(rows);
+  $('vSodo').textContent=pct(a.pS);
+  $('dSodo').textContent=num(a.sOk)+' dari '+num(a.sN)+' transaksi \u2264 '+a.tS+' mnt';
+  $('vDoto').textContent=pct(a.pD);
+  $('dDoto').textContent=num(a.dOk)+' dari '+num(a.dN)+' transaksi \u2264 '+a.tD+' mnt';
+  $('vTrx').textContent=num(rows.length);
+  $('dTrx').textContent='baris item \u2014 '+perLabel();
+  $('ltSub').textContent=perLabel();
+  function row(nm,ok,bad,n,pv,tgt){
+    return '<tr><td style="font-weight:700;white-space:nowrap">'+nm+'</td><td class="mono">'+num(ok)+'</td><td class="mono">'+num(bad)+'</td>'
+      +'<td class="mono">'+num(n)+'</td><td class="mono" style="font-weight:800">'+(pv==null?'\u2014':pv.toFixed(1)+'%')+'</td>'
+      +'<td class="mono">\u2264 '+tgt+' mnt</td></tr>';}
+  $('ltTable').innerHTML='<div class="twrap"><table style="min-width:0"><thead><tr>'
+    +'<th></th><th>Ok</th><th>Tidak</th><th>Total</th><th>%LT</th><th>Target</th></tr></thead><tbody>'
+    +row('SO \u2013 DO',a.sOk,a.sBad,a.sN,a.pS,a.tS)
+    +row('DO \u2013 TO',a.dOk,a.dBad,a.dN,a.pD,a.tD)
+    +'</tbody></table></div>';
+  renderWeeks(rows);renderLTMisses(rows);}
+function renderWeeks(rows){
+  var wk=C.byWeek(rows);
+  var W=640,H=210,padL=34,padR=8,padT=16,padB=26,iw=W-padL-padR,ih=H-padT-padB;
+  var slot=iw/4,bw=Math.min(26,slot*0.28),gap=5,sv='';
+  [0,25,50,75,100].forEach(function(g){var y=padT+ih*(1-g/100);
+    sv+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="#EDF0F3"/>';
+    sv+='<text x="'+(padL-8)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="#9AA1AB">'+g+'</text>';});
+  wk.forEach(function(a,i){
+    var cx=padL+slot*i+slot/2;
+    [[a.pS,'#FFC20E',a.sN],[a.pD,'#545A63',a.dN]].forEach(function(p,j){
+      var v=(p[0]==null)?0:p[0],bh=ih*v/100,x=cx-bw-gap/2+j*(bw+gap),y=padT+ih-bh;
+      var lbl=(p[2]===0)?'\u2013':v.toFixed(0);
+      sv+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+Math.max(bh,2)+'" rx="4" fill="'+(p[2]===0?'#EEF1F4':p[1])+'"/>'
+        +'<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="8.5" font-weight="700" fill="#7B838E">'+lbl+'</text>';});
+    sv+='<text x="'+cx+'" y="'+(H-8)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#7B838E">Week '+a.wk+'</text>';});
+  $('wchart').innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block" role="img" aria-label="%LT per minggu">'+sv+'</svg>';}
+function renderLTMisses(rows){
+  var ms=C.ltMisses(rows);
+  $('ltMissTitle').textContent='Transaksi lewat target SO\u2013DO ('+C.SODO_T+' mnt) \u2014 '+perLabel();
+  var cEl=$('ltMissCount');cEl.textContent=num(ms.length)+' transaksi';cEl.className='count'+(ms.length?'':' zero');
+  if(!ms.length){$('ltMissBody').innerHTML='<div class="okmsg">Semua transaksi SO\u2013DO dalam target pada periode ini.</div>';return;}
+  var tr='';
+  ms.forEach(function(r){
+    tr+='<tr><td class="mono">'+esc(r.so)+'</td><td>'+esc(r.cust)+'</td><td class="mono">'+esc(r.mat)+'</td>'
+      +'<td>'+esc(r.desc)+'</td><td class="mono">'+esc(r.itca)+'</td><td class="mono">'+esc(r.sloc)+'</td>'
+      +'<td class="mono">W'+r.wk+'</td><td class="mono" style="font-weight:700">'+fmtMin(r.sodo)+'</td></tr>';});
+  $('ltMissBody').innerHTML='<div class="twrap"><table><thead><tr>'
+    +'<th>Sales Order</th><th>Reff Customer</th><th>Part Number</th><th>Deskripsi</th><th>ItCa</th><th>SLOC</th><th>Week</th><th>LT SO\u2013DO</th>'
+    +'</tr></thead><tbody>'+tr+'</tbody></table></div>';}
 function renderChart(){
   var W=640,H=210,padL=34,padR=8,padT=16,padB=26,iw=W-padL-padR,ih=H-padT-padB;
   var ms=DATA.months,slot=iw/ms.length,bw=Math.min(19,slot*0.28),gap=4,s='';
